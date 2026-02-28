@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react'
-import { Stage, Layer, Line, Text } from 'react-konva'
+import { Stage, Layer, Line, Text, Transformer } from 'react-konva'
 import type Konva from 'konva'
 
 interface Stage3Props {
@@ -15,11 +15,128 @@ const STICKER_COLORS: Record<StickerColor, string> = {
   red: '#ef4444',
 }
 
-// Unified action history — undo pops from this
 type Action =
   | { kind: 'line'; id: string; points: number[] }
-  | { kind: 'sticker'; id: string; x: number; y: number; color: StickerColor }
-  | { kind: 'vehicle'; id: string; x: number; y: number; label: string }
+  | { kind: 'sticker'; id: string; x: number; y: number; rotation: number; color: StickerColor }
+  | { kind: 'vehicle'; id: string; x: number; y: number; rotation: number; label: string }
+
+// --- Draggable + rotatable X sticker ---
+function DraggableSticker({
+  sticker, isSelected, onSelect, onDeselect, onUpdate,
+}: {
+  sticker: Extract<Action, { kind: 'sticker' }>
+  isSelected: boolean
+  onSelect: () => void
+  onDeselect: () => void
+  onUpdate: (patch: Partial<typeof sticker>) => void
+}) {
+  const nodeRef = useRef<Konva.Text>(null)
+  const trRef = useRef<Konva.Transformer>(null)
+
+  useEffect(() => {
+    if (isSelected && trRef.current && nodeRef.current) {
+      trRef.current.nodes([nodeRef.current])
+      trRef.current.getLayer()?.batchDraw()
+    } else if (!isSelected && trRef.current) {
+      trRef.current.nodes([])
+      trRef.current.getLayer()?.batchDraw()
+    }
+  }, [isSelected])
+
+  return (
+    <>
+      <Text
+        ref={nodeRef}
+        text="✕"
+        x={sticker.x}
+        y={sticker.y}
+        rotation={sticker.rotation}
+        fontSize={56}
+        fill={STICKER_COLORS[sticker.color]}
+        fontStyle="bold"
+        draggable
+        onClick={e => { e.cancelBubble = true; onSelect() }}
+        onTap={e => { e.cancelBubble = true; onSelect() }}
+        onDragEnd={e => onUpdate({ x: e.target.x(), y: e.target.y() })}
+        onTransformEnd={e => onUpdate({
+          x: e.target.x(),
+          y: e.target.y(),
+          rotation: e.target.rotation(),
+        })}
+      />
+      {isSelected && (
+        <Transformer
+          ref={trRef}
+          enabledAnchors={[]}
+          rotateEnabled={true}
+          borderStroke="#64748b"
+          borderStrokeWidth={1.5}
+          anchorStroke="#64748b"
+          anchorFill="#fff"
+          anchorSize={10}
+        />
+      )}
+    </>
+  )
+}
+
+// --- Draggable + rotatable vehicle label ---
+function DraggableVehicle({
+  vehicle, isSelected, onSelect, onUpdate,
+}: {
+  vehicle: Extract<Action, { kind: 'vehicle' }>
+  isSelected: boolean
+  onSelect: () => void
+  onUpdate: (patch: Partial<typeof vehicle>) => void
+}) {
+  const nodeRef = useRef<Konva.Text>(null)
+  const trRef = useRef<Konva.Transformer>(null)
+
+  useEffect(() => {
+    if (isSelected && trRef.current && nodeRef.current) {
+      trRef.current.nodes([nodeRef.current])
+      trRef.current.getLayer()?.batchDraw()
+    } else if (!isSelected && trRef.current) {
+      trRef.current.nodes([])
+      trRef.current.getLayer()?.batchDraw()
+    }
+  }, [isSelected])
+
+  return (
+    <>
+      <Text
+        ref={nodeRef}
+        text={`🚗 ${vehicle.label}`}
+        x={vehicle.x}
+        y={vehicle.y}
+        rotation={vehicle.rotation}
+        fontSize={28}
+        fill="#1e293b"
+        draggable
+        onClick={e => { e.cancelBubble = true; onSelect() }}
+        onTap={e => { e.cancelBubble = true; onSelect() }}
+        onDragEnd={e => onUpdate({ x: e.target.x(), y: e.target.y() })}
+        onTransformEnd={e => onUpdate({
+          x: e.target.x(),
+          y: e.target.y(),
+          rotation: e.target.rotation(),
+        })}
+      />
+      {isSelected && (
+        <Transformer
+          ref={trRef}
+          enabledAnchors={[]}
+          rotateEnabled={true}
+          borderStroke="#64748b"
+          borderStrokeWidth={1.5}
+          anchorStroke="#64748b"
+          anchorFill="#fff"
+          anchorSize={10}
+        />
+      )}
+    </>
+  )
+}
 
 export default function Stage3({ vehicles, onComplete }: Stage3Props) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -28,9 +145,9 @@ export default function Stage3({ vehicles, onComplete }: Stage3Props) {
 
   const [tool, setTool] = useState<'pen' | 'select'>('select')
   const [actions, setActions] = useState<Action[]>([])
-  // In-progress line while drawing (not yet committed to history)
   const [currentLine, setCurrentLine] = useState<number[] | null>(null)
   const isDrawing = useRef(false)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   // Resize observer
   useEffect(() => {
@@ -63,19 +180,26 @@ export default function Stage3({ vehicles, onComplete }: Stage3Props) {
   function handleMouseUp() {
     if (!isDrawing.current || !currentLine) return
     isDrawing.current = false
-    // Commit the finished line to history
     if (currentLine.length >= 4) {
       setActions(prev => [...prev, { kind: 'line', id: crypto.randomUUID(), points: currentLine }])
     }
     setCurrentLine(null)
   }
 
-  // --- Undo: removes last committed action ---
-  function undo() {
-    setActions(prev => prev.slice(0, -1))
+  function handleStageClick(e: Konva.KonvaEventObject<MouseEvent>) {
+    if (e.target === e.target.getStage()) setSelectedId(null)
   }
 
-  // --- HTML drag-and-drop from toolbar onto canvas ---
+  function undo() {
+    setActions(prev => prev.slice(0, -1))
+    setSelectedId(null)
+  }
+
+  function updateAction(id: string, patch: object) {
+    setActions(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a))
+  }
+
+  // --- HTML drag-and-drop ---
   function handleDragOver(e: React.DragEvent) {
     e.preventDefault()
   }
@@ -90,14 +214,13 @@ export default function Stage3({ vehicles, onComplete }: Stage3Props) {
 
     if (type === 'sticker') {
       const color = e.dataTransfer.getData('color') as StickerColor
-      setActions(prev => [...prev, { kind: 'sticker', id: crypto.randomUUID(), x, y, color }])
+      setActions(prev => [...prev, { kind: 'sticker', id: crypto.randomUUID(), x, y, rotation: 0, color }])
     } else if (type === 'vehicle') {
       const label = e.dataTransfer.getData('label')
-      setActions(prev => [...prev, { kind: 'vehicle', id: crypto.randomUUID(), x, y, label }])
+      setActions(prev => [...prev, { kind: 'vehicle', id: crypto.randomUUID(), x, y, rotation: 0, label }])
     }
   }
 
-  // Derive display lists from actions
   const lines = actions.filter((a): a is Extract<Action, { kind: 'line' }> => a.kind === 'line')
   const stickers = actions.filter((a): a is Extract<Action, { kind: 'sticker' }> => a.kind === 'sticker')
   const vehicleStickers = actions.filter((a): a is Extract<Action, { kind: 'vehicle' }> => a.kind === 'vehicle')
@@ -111,7 +234,7 @@ export default function Stage3({ vehicles, onComplete }: Stage3Props) {
     <div className="flex flex-col gap-4 w-full h-full">
       <div className="text-center">
         <h2 className="text-2xl font-bold mb-1">Mark the incident</h2>
-        <p className="text-base-content/60 text-sm">Drag markers onto the canvas to indicate what happened</p>
+        <p className="text-base-content/60 text-sm">Drag markers onto the canvas · Click to rotate</p>
       </div>
 
       <div className="flex gap-4 flex-1 min-h-0">
@@ -130,9 +253,10 @@ export default function Stage3({ vehicles, onComplete }: Stage3Props) {
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
+            onClick={handleStageClick}
             style={{ cursor: tool === 'pen' ? 'crosshair' : 'default' }}
           >
-            {/* Drawing + vehicle layer */}
+            {/* Drawing + vehicles layer */}
             <Layer>
               {lines.map(line => (
                 <Line
@@ -145,7 +269,6 @@ export default function Stage3({ vehicles, onComplete }: Stage3Props) {
                   lineJoin="round"
                 />
               ))}
-              {/* In-progress line */}
               {currentLine && currentLine.length >= 4 && (
                 <Line
                   points={currentLine}
@@ -157,35 +280,25 @@ export default function Stage3({ vehicles, onComplete }: Stage3Props) {
                 />
               )}
               {vehicleStickers.map(v => (
-                <Text
+                <DraggableVehicle
                   key={v.id}
-                  text={`🚗 ${v.label}`}
-                  x={v.x}
-                  y={v.y}
-                  fontSize={28}
-                  fill="#1e293b"
-                  draggable
-                  onDragEnd={e => setActions(prev => prev.map(a =>
-                    a.id === v.id ? { ...a, x: e.target.x(), y: e.target.y() } : a
-                  ))}
+                  vehicle={v}
+                  isSelected={selectedId === v.id}
+                  onSelect={() => setSelectedId(v.id)}
+                  onUpdate={patch => updateAction(v.id, patch)}
                 />
               ))}
             </Layer>
             {/* X stickers always on top */}
             <Layer>
               {stickers.map(s => (
-                <Text
+                <DraggableSticker
                   key={s.id}
-                  text="✕"
-                  x={s.x}
-                  y={s.y}
-                  fontSize={56}
-                  fill={STICKER_COLORS[s.color]}
-                  fontStyle="bold"
-                  draggable
-                  onDragEnd={e => setActions(prev => prev.map(a =>
-                    a.id === s.id ? { ...a, x: e.target.x(), y: e.target.y() } : a
-                  ))}
+                  sticker={s}
+                  isSelected={selectedId === s.id}
+                  onSelect={() => setSelectedId(s.id)}
+                  onDeselect={() => setSelectedId(null)}
+                  onUpdate={patch => updateAction(s.id, patch)}
                 />
               ))}
             </Layer>
@@ -194,7 +307,6 @@ export default function Stage3({ vehicles, onComplete }: Stage3Props) {
 
         {/* Toolbar */}
         <div className="flex flex-col gap-3 items-center bg-base-200 rounded-xl p-3 w-20">
-          {/* Pen tool */}
           <button
             className={`btn btn-square btn-sm w-full ${tool === 'pen' ? 'btn-primary' : 'btn-ghost'}`}
             title="Pen"
@@ -203,7 +315,6 @@ export default function Stage3({ vehicles, onComplete }: Stage3Props) {
             ✏️
           </button>
 
-          {/* Undo */}
           <button
             className="btn btn-square btn-sm btn-ghost w-full"
             title="Undo"
@@ -215,7 +326,6 @@ export default function Stage3({ vehicles, onComplete }: Stage3Props) {
 
           <div className="divider my-0 w-full" />
 
-          {/* Draggable X stickers */}
           {(['green', 'yellow', 'red'] as StickerColor[]).map(color => (
             <div
               key={color}
@@ -234,7 +344,6 @@ export default function Stage3({ vehicles, onComplete }: Stage3Props) {
 
           <div className="divider my-0 w-full" />
 
-          {/* Draggable vehicle icons */}
           {vehicles.map((v, i) => (
             <div
               key={i}
