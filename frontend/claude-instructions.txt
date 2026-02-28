@@ -1,0 +1,24 @@
+Change the existing code to achieve the following:
+
+The website needs 5 stages moving to the next one after succesfully passing the previous
+
+Stage 1: Webcam / Camera Capture
+The user needs to be able to upload a photo of their ID and this is sent to the backend
+
+the user can submit this stage by pressing a submit button below the upload info
+
+Stage 2: The user is prompted for a 10 - 15 word explanation of what happened
+
+This is analysed by the backend information is received for the next stage
+
+The user can press submit below the textbox to move to the next stage
+
+Stage 3: Using the information from stage 2, a new menu is created. In the center a canvas, on the right side, a toolbar. It will have a pen icon that allows the user to draw on the canvas and a undo button that undoes the last action. Below the pen icon, there 3 Xs (green, yellow and red) which are infinitely droppable stickers the user can put on the canvas (the Xs are alwasys in the top layer). Below the Xs will be icons of vehicles, you can use a word for now, the specific of how many and what the icons are will be dependant on the response from stage 2. Once the user is done setting this stuff they can press submit below the canvas to go to the next step. The png of their canvas will be sent to the backend at this step.
+
+Stage 4: The user is presented with an input box populated by the response from the backend from the previous step. The user should be able to edit this text and go to the next stage by pressing submit below the input box.
+
+Stage 5: The user will be presented with a question of how satisifed they are with the help they received today. They will be presented with 5 images of equal size aligned next to each other containing faces that represent happines levels from 1 being unhappy to 5 being happy.
+
+
+
+Additional info: DO NOT WRITE THE BACKEND AT ALL, LEAVE ALL ENDPOINTS AS PLACEHOLDERS I WILL WIRE THIS UP MYSELF
