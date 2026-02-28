@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+gunicorn
+google-genai
+httpx
+pillow
+numpy
