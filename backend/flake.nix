@@ -21,13 +21,6 @@
           fastapi # web framework
           uvicorn # ASGI server for dev
           gunicorn # production server managing uvicorn workers
-          sqlalchemy # ORM
-          asyncpg # async postgres driver
-          alembic # database migrations
-          passlib # password hashing
-          bcrypt # hashing backend for passlib
-          python-jose # JWT tokens
-          pydantic-settings # environment variable management
           google-genai
           httpx
         ]);
@@ -35,12 +28,6 @@
       devShells.default = pkgs.mkShell {
         packages = with pkgs; [
           pythonEnv
-          # Database
-          postgresql # local postgres for dev
-          pgcli # nicer postgres CLI with autocomplete
-
-          # Frontend
-          nodejs_25 # node runtime
 
           # Dev utilities
           direnv # auto-loads .env when entering project folder
@@ -51,9 +38,20 @@
           git
         ];
         shellHook = ''
-          echo " Hackathon Shell Loaded"
-          echo "  Backend:  uvicorn main:app --reload"
-          echo "  Frontend: npm run dev"
+          echo " Hackathon Shell Loaded "
+
+          if [ ! -d .venv ]; then
+            echo "Creating virtual environment..."
+            python -m venv .venv
+          fi
+
+          source .venv/bin/activate
+          pip install -q fastapi \
+            google-genai \
+            httpx mediapipe pillow numpy
+
+          alias backend="uvicorn main:app --reload"
+          alias frontend="cd frontend && npm run dev"
         '';
       };
     });

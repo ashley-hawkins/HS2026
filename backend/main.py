@@ -1,17 +1,139 @@
 from fastapi import FastAPI, APIRouter, File, UploadFile
 from pydantic import BaseModel
 from typing import Optional
-
 import easyocr
 import numpy as np
 import cv2
+import mediapipe as mp
+from PIL import Image
+import io
+import base64
+import google.genai as genai
+import math
 
 # from pydantic_settings import BaseSettings, SettingsConfigDict
-import google.genai as genai
-
 
 # class Settings(BaseSettings):
 #     GEMINI_KEY: str
+
+
+BaseOptions = mp.tasks.BaseOptions
+FaceDetector = mp.tasks.vision.FaceDetector
+FaceDetectorOptions = mp.tasks.vision.FaceDetectorOptions
+VisionRunningMode = mp.tasks.vision.RunningMode
+
+
+def getRotation(detection) -> float:
+    right_eye = detection.keypoints[0]
+    left_eye = detection.keypoints[1]
+    for i, kp in enumerate(detection.keypoints):
+        print(f"keypoint {i}: x={kp.x:.3f}, y={kp.y:.3f}")
+
+    dx = left_eye.x - right_eye.x
+    dy = left_eye.y - right_eye.y
+
+    upsideDown = checkUpsideDown(detection)
+
+    angle = math.degrees(math.atan2(dy, dx))
+    print("angle before : ", angle)
+    if upsideDown:
+        angle += 0
+    return angle
+
+
+def checkUpsideDown(detection) -> bool:
+    eye = detection.keypoints[0]
+    nose = detection.keypoints[2]
+
+    if nose.y < eye.y:
+        return True
+    else:
+        return False
+
+
+def getFace(base64_image: str) -> str | None:
+    image_bytes = base64.b64decode(base64_image)
+    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+
+    # mp_face = mp.python.solutions.face_detection  # pyright: ignore
+    # with mp_face.FaceDetection(
+    #     model_selection=0, min_detection_confidence=0.5
+    # ) as detector:
+    #     import numpy as np
+    #
+    #     result = detector.process(np.array(image))
+    #
+    # if not result.detections:
+    #     return None  # no face found
+    #
+
+    options = FaceDetectorOptions(
+        base_options=BaseOptions(model_asset_path="face_detector.tflite"),
+        running_mode=VisionRunningMode.IMAGE,
+    )
+
+    with FaceDetector.create_from_options(options) as detector:
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=np.array(image))
+        result = detector.detect(mp_image)
+
+    if not result.detections:
+        return None
+
+    print("==== first pass ====")
+    angle = getRotation(result.detections[0])
+    print(f"need {angle} degrees")
+    image = image.rotate(angle, expand=True, resample=Image.Resampling.BICUBIC)
+
+    with FaceDetector.create_from_options(options) as detector:
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=np.array(image))
+        result = detector.detect(mp_image)
+
+    if not result.detections:
+        return None
+
+    print("==== second pass ====")
+    angle = getRotation(result.detections[0])
+    print(f"need {angle} degrees")
+    image = image.rotate(angle, expand=True, resample=Image.Resampling.BICUBIC)
+
+    with FaceDetector.create_from_options(options) as detector:
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=np.array(image))
+        result = detector.detect(mp_image)
+
+    if not result.detections:
+        return None
+
+    bbox = result.detections[0].bounding_box
+    margin_w = bbox.width * 0.4 // 2
+    margin_h = bbox.height * 0.4 // 2
+    top_mod = 1.9
+    left_mod = 1
+    right_mod = 0.7
+    bot_mod = 0.7
+    w, h = image.size
+    cropped = image.crop(
+        (
+            max(0, bbox.origin_x - int(margin_w * left_mod)),
+            max(0, bbox.origin_y - int(margin_h * top_mod)),
+            min(w, bbox.origin_x + bbox.width + int(margin_w * right_mod)),
+            min(h, bbox.origin_y + bbox.height + int(margin_h * bot_mod)),
+        )
+    )
+    #
+    # # Get the first face's bounding box
+    # detection = result.detections[0]
+    # facebox = detection.location_data.relative_bounding_box
+    #
+    # image_w, image_h = image.size
+    # x = int(facebox.xmin * image_w)
+    # y = int(facebox.ymin * image_h)
+    # face_w = int(facebox.width * image_w)
+    # face_h = int(facebox.height * image_h)
+    #
+    # cropped = image.crop((x, y, x + face_w, y + face_h))
+    outputBuffer = io.BytesIO()
+    cropped.save(outputBuffer, format="webp")
+    return base64.b64encode(outputBuffer.getvalue()).decode("utf-8")
 
 
 class SimplePrompt(BaseModel):
@@ -32,6 +154,7 @@ class ReportRequest(BaseModel):
 gemini = genai.Client()
 reader = easyocr.Reader(["en"], gpu=False)
 
+
 @router.post("/ocr/")
 async def process_image(image: UploadFile = File(...)):
     image_bytes = await image.read()
@@ -41,8 +164,7 @@ async def process_image(image: UploadFile = File(...)):
     if img is None:
         return {"error": "Invalid image"}
 
-    raw_results = reader.readtext(img, detail = 0)
-
+    raw_results = reader.readtext(img, detail=0)
 
     return raw_results
 
@@ -56,6 +178,7 @@ async def process_image(image: UploadFile = File(...)):
     #     })
 
     # return results
+
 
 @router.get("/health")
 def health():
@@ -84,7 +207,14 @@ def just_faces(request: ReportRequest):
 def just_report(request: ReportRequest):
     return {"report": "report goes here", "images": "EMPTY"}
 
+
 app.include_router(router)
 
 if __name__ == "__main__":
+    with open("test1.webp", "rb") as file:
+        base64_string = base64.b64encode(file.read()).decode("utf-8")
+
+    with open("result.webp", "wb") as file:
+        file.write(base64.b64decode(getFace(base64_string)))
+
     print("working")
