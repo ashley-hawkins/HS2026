@@ -4,15 +4,17 @@ import viteLogo from '/vite.svg'
 import './App.css'
 
 import { WebcamCapture } from './WebcamCapture'
+import CarDrawing from './CarDrawing'
 
 export function App() {
 
   return (
     <div className="h-full w-full flex flex-col">
       <h1 className="text-3xl font-bold text-center">Submit a claim</h1>
-      <WebcamCapture></WebcamCapture>
+      {/* <WebcamCapture></WebcamCapture> */}
+      <CarDrawing />
       {/* spacer */}
-      <div className="flex-0"></div>
+      <div className="grow"></div>
       <progress className="progress progress-accent" value="70" max="100"></progress>
     </div>
   )

@@ -51,7 +51,7 @@ export function WebcamCapture({ onCapture }: WebcamCaptureProps) {
   }
 
   return (
-    <div className="flex flex-1 flex-col items-center gap-4 min-h-0">
+    <div className="flex flex-9999 flex-col items-center gap-4 min-h-0">
       {error ? (
         <div className="alert alert-error">
           <span>{error}</span>
