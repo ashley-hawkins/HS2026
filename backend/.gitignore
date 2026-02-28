@@ -1,3 +1,9 @@
 .env
 .direnv/
-.__pycache__/
+__pycache__/
+flake.nix
+flake.lock
+lib
+bin
+share
+pyvenv.cfg
