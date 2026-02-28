@@ -1,2 +1,40 @@
 @import "tailwindcss";
 @plugin "daisyui";
+
+@plugin "daisyui/theme" {
+  name: "brand";
+  default: true;
+  color-scheme: light;
+
+  /* Primary: bold red */
+  --color-primary: oklch(45% 0.25 27);
+  --color-primary-content: oklch(100% 0 0);
+
+  /* Secondary: cobalt blue */
+  --color-secondary: oklch(50% 0.13 240);
+  --color-secondary-content: oklch(100% 0 0);
+
+  /* Accent: cobalt blue (same family) */
+  --color-accent: oklch(50% 0.13 240);
+  --color-accent-content: oklch(100% 0 0);
+
+  /* Neutral: muted slate */
+  --color-neutral: oklch(48% 0.025 225);
+  --color-neutral-content: oklch(100% 0 0);
+
+  /* Base: white + off-white */
+  --color-base-100: oklch(100% 0 0);
+  --color-base-200: oklch(97% 0.008 220);
+  --color-base-300: oklch(93% 0.012 220);
+  --color-base-content: oklch(15% 0.025 265);
+
+  /* Semantic */
+  --color-info: oklch(50% 0.13 240);
+  --color-info-content: oklch(100% 0 0);
+  --color-success: oklch(55% 0.15 150);
+  --color-success-content: oklch(100% 0 0);
+  --color-warning: oklch(70% 0.15 75);
+  --color-warning-content: oklch(15% 0.025 265);
+  --color-error: oklch(45% 0.25 27);
+  --color-error-content: oklch(100% 0 0);
+}

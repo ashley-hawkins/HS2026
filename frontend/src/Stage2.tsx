@@ -12,8 +12,8 @@ export default function Stage2({ onComplete }: Stage2Props) {
   const wordCount = text.trim() === '' ? 0 : text.trim().split(/\s+/).length
 
   async function handleSubmit() {
-    if (wordCount < 10 || wordCount > 15) {
-      setError('Please write between 10 and 15 words.')
+    if (wordCount > 15) {
+      setError('Please write no more than 15 words.')
       return
     }
     setError(null)
@@ -35,7 +35,7 @@ export default function Stage2({ onComplete }: Stage2Props) {
     <div className="flex flex-col items-center gap-6 w-full max-w-lg mx-auto">
       <div className="text-center">
         <h2 className="text-2xl font-bold mb-1">Describe what happened</h2>
-        <p className="text-base-content/60 text-sm">Write a brief explanation in 10–15 words</p>
+        <p className="text-base-content/60 text-sm">Write a brief explanation (up to 15 words)</p>
       </div>
 
       <div className="w-full">
@@ -45,8 +45,8 @@ export default function Stage2({ onComplete }: Stage2Props) {
           value={text}
           onChange={e => setText(e.target.value)}
         />
-        <div className={`text-sm mt-1 text-right ${wordCount > 15 ? 'text-error' : wordCount >= 10 ? 'text-success' : 'text-base-content/50'}`}>
-          {wordCount} / 10–15 words
+        <div className={`text-sm mt-1 text-right ${wordCount > 15 ? 'text-error' : 'text-base-content/50'}`}>
+          {wordCount} / 15 words
         </div>
       </div>
 
@@ -54,7 +54,7 @@ export default function Stage2({ onComplete }: Stage2Props) {
 
       <button
         className="btn btn-primary w-full"
-        disabled={submitting || wordCount < 10 || wordCount > 15}
+        disabled={submitting || wordCount === 0 || wordCount > 15}
         onClick={handleSubmit}
       >
         {submitting ? <span className="loading loading-spinner" /> : 'Submit'}
