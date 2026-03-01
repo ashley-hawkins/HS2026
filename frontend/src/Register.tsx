@@ -1,26 +1,31 @@
-import { useState } from 'react'
+import { useState } from "react";
 
 interface RegisterProps {
-  onSuccess?: () => void
+  onSuccess?: () => void;
 }
 
 export default function Register({ onSuccess }: RegisterProps) {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [repeat, setRepeat] = useState('')
-  const [submitting, setSubmitting] = useState(false)
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [repeat, setRepeat] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const passwordsMatch = password.length > 0 && password === repeat
+  const passwordsMatch = password.length > 0 && password === repeat;
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!passwordsMatch) return
-    setSubmitting(true)
+    e.preventDefault();
+    if (!passwordsMatch) return;
+    setSubmitting(true);
     try {
-      // TODO: call register API
-      onSuccess?.()
+      const res = await fetch("http://localhost:8000/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok) throw new Error("Registration failed");
+      onSuccess?.();
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
   }
 
@@ -33,40 +38,46 @@ export default function Register({ onSuccess }: RegisterProps) {
         <h2 className="text-2xl font-bold text-center">Create Account</h2>
 
         <div className="form-control gap-1">
-          <label className="label text-sm font-medium" htmlFor="reg-email">Email</label>
+          <label className="label text-sm font-medium" htmlFor="reg-email">
+            Email
+          </label>
           <input
             id="reg-email"
             type="email"
             className="input input-bordered w-full"
             placeholder="you@example.com"
             value={email}
-            onChange={e => setEmail(e.target.value)}
+            onChange={(e) => setEmail(e.target.value)}
             required
           />
         </div>
 
         <div className="form-control gap-1">
-          <label className="label text-sm font-medium" htmlFor="reg-password">Password</label>
+          <label className="label text-sm font-medium" htmlFor="reg-password">
+            Password
+          </label>
           <input
             id="reg-password"
             type="password"
             className="input input-bordered w-full"
             placeholder="••••••••"
             value={password}
-            onChange={e => setPassword(e.target.value)}
+            onChange={(e) => setPassword(e.target.value)}
             required
           />
         </div>
 
         <div className="form-control gap-1">
-          <label className="label text-sm font-medium" htmlFor="reg-repeat">Repeat Password</label>
+          <label className="label text-sm font-medium" htmlFor="reg-repeat">
+            Repeat Password
+          </label>
           <input
             id="reg-repeat"
             type="password"
-            className={`input input-bordered w-full ${repeat.length > 0 && !passwordsMatch ? 'input-error' : ''}`}
+            className={`input input-bordered w-full ${repeat.length > 0 && !passwordsMatch ? "input-error" : ""}`}
             placeholder="••••••••"
             value={repeat}
-            onChange={e => setRepeat(e.target.value)}
+            onChange={(e) => setRepeat(e.target.value)}
             required
           />
           {repeat.length > 0 && !passwordsMatch && (
@@ -79,9 +90,13 @@ export default function Register({ onSuccess }: RegisterProps) {
           className="btn btn-primary w-full mt-1"
           disabled={!passwordsMatch || submitting}
         >
-          {submitting ? <span className="loading loading-spinner" /> : 'Create Account'}
+          {submitting ? (
+            <span className="loading loading-spinner" />
+          ) : (
+            "Create Account"
+          )}
         </button>
       </form>
     </div>
-  )
+  );
 }

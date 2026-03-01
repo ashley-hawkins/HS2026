@@ -24,6 +24,13 @@ export function App() {
   const [stage, setStage] = useState(1)
   const [vehicles, setVehicles] = useState<string[]>([])
   const [summary, setSummary] = useState('')
+  const [userEmail, setUserEmail] = useState<string | null>(() => localStorage.getItem('email'))
+
+  function signOut() {
+    localStorage.removeItem('token')
+    localStorage.removeItem('email')
+    setUserEmail(null)
+  }
 
   const progress = ((stage - 1) / (TOTAL_STAGES - 1)) * 100
 
@@ -52,19 +59,18 @@ export function App() {
             + New Claim
           </button>
         </div>
-        <div className="flex gap-2">
-          <button
-            className="btn btn-sm btn-ghost"
-            onClick={() => setView('register')}
-          >
-            Register
-          </button>
-          <button
-            className="btn btn-sm btn-secondary btn-outline"
-            onClick={() => setView('login')}
-          >
-            Log In
-          </button>
+        <div className="flex gap-2 items-center">
+          {userEmail ? (
+            <>
+              <span className="text-sm">{userEmail}</span>
+              <button className="btn btn-sm btn-ghost" onClick={signOut}>Sign Out</button>
+            </>
+          ) : (
+            <>
+              <button className="btn btn-sm btn-ghost" onClick={() => setView('register')}>Register</button>
+              <button className="btn btn-sm btn-secondary btn-outline" onClick={() => setView('login')}>Log In</button>
+            </>
+          )}
         </div>
       </nav>
 
@@ -76,7 +82,7 @@ export function App() {
       )}
 
       {view === 'login' && (
-        <Login onSuccess={() => setView('claim')} />
+        <Login onSuccess={(email) => { setUserEmail(email); setView('claim') }} />
       )}
 
       {view === 'register' && (

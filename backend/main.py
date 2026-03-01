@@ -1,6 +1,13 @@
-from fastapi import FastAPI, APIRouter, File, UploadFile
+from fastapi import FastAPI, APIRouter, File, UploadFile, Depends, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordBearer
+from database import init_db, get_db, User, Claim
 from pydantic import BaseModel
 from typing import Optional
+from sqlalchemy.orm import Session
+from jose import jwt, JWTError
+import bcrypt
+from datetime import datetime, timedelta
 import easyocr
 import numpy as np
 import cv2
@@ -10,6 +17,12 @@ import io
 import base64
 import google.genai as genai
 import math
+import os
+
+SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production")
+ALGORITHM = "HS256"
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 # from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -141,6 +154,13 @@ class SimplePrompt(BaseModel):
 
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+init_db()
 router = APIRouter()
 chosenModel = "gemini-3-flash-preview"
 
@@ -206,6 +226,74 @@ def just_faces(request: ReportRequest):
 @router.post("/just-report")
 def just_report(request: ReportRequest):
     return {"report": "report goes here", "images": "EMPTY"}
+
+
+# --- auth helpers ---
+
+def create_token(user_id: int) -> str:
+    payload = {
+        "sub": str(user_id),
+        "exp": datetime.utcnow() + timedelta(hours=24)
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = int(payload["sub"])
+    except (JWTError, KeyError):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    return user
+
+
+# --- auth routes ---
+
+class AuthRequest(BaseModel):
+    email: str
+    password: str
+
+
+class ClaimRequest(BaseModel):
+    content: str
+
+
+@router.post("/auth/register")
+def register(body: AuthRequest, db: Session = Depends(get_db)):
+    hashed = bcrypt.hashpw(body.password.encode(), bcrypt.gensalt()).decode()
+    user = User(email=body.email, password=hashed)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return {"id": user.id, "email": user.email}
+
+
+@router.post("/auth/login")
+def login(body: AuthRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == body.email).first()
+    if not user or not bcrypt.checkpw(body.password.encode(), user.password.encode()):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    return {"access_token": create_token(user.id), "token_type": "bearer", "email": user.email}
+
+
+# --- protected claim routes ---
+
+@router.get("/claims")
+def get_claims(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return db.query(Claim).filter(Claim.user_id == current_user.id).all()
+
+
+@router.post("/claims")
+def create_claim(body: ClaimRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    claim = Claim(user_id=current_user.id, content=body.content)
+    db.add(claim)
+    db.commit()
+    db.refresh(claim)
+    return claim
 
 
 app.include_router(router)

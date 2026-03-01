@@ -1,22 +1,30 @@
-import { useState } from 'react'
+import { useState } from "react";
 
 interface LoginProps {
-  onSuccess?: () => void
+  onSuccess?: (email: string) => void;
 }
 
 export default function Login({ onSuccess }: LoginProps) {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [submitting, setSubmitting] = useState(false)
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setSubmitting(true)
+    e.preventDefault();
+    setSubmitting(true);
     try {
-      // TODO: call login API
-      onSuccess?.()
+      const res = await fetch("http://localhost:8000/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok) throw new Error("Invalid credentials");
+      const data = await res.json();
+      localStorage.setItem("token", data.access_token);
+      localStorage.setItem("email", data.email);
+      onSuccess?.(data.email);
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
   }
 
@@ -29,27 +37,31 @@ export default function Login({ onSuccess }: LoginProps) {
         <h2 className="text-2xl font-bold text-center">Log In</h2>
 
         <div className="form-control gap-1">
-          <label className="label text-sm font-medium" htmlFor="login-email">Email</label>
+          <label className="label text-sm font-medium" htmlFor="login-email">
+            Email
+          </label>
           <input
             id="login-email"
             type="email"
             className="input input-bordered w-full"
             placeholder="you@example.com"
             value={email}
-            onChange={e => setEmail(e.target.value)}
+            onChange={(e) => setEmail(e.target.value)}
             required
           />
         </div>
 
         <div className="form-control gap-1">
-          <label className="label text-sm font-medium" htmlFor="login-password">Password</label>
+          <label className="label text-sm font-medium" htmlFor="login-password">
+            Password
+          </label>
           <input
             id="login-password"
             type="password"
             className="input input-bordered w-full"
             placeholder="••••••••"
             value={password}
-            onChange={e => setPassword(e.target.value)}
+            onChange={(e) => setPassword(e.target.value)}
             required
           />
         </div>
@@ -59,9 +71,9 @@ export default function Login({ onSuccess }: LoginProps) {
           className="btn btn-primary w-full mt-1"
           disabled={submitting}
         >
-          {submitting ? <span className="loading loading-spinner" /> : 'Log In'}
+          {submitting ? <span className="loading loading-spinner" /> : "Log In"}
         </button>
       </form>
     </div>
-  )
+  );
 }
