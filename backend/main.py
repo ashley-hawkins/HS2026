@@ -368,10 +368,6 @@ def stage1(
     # Strip data URL prefix if present
     raw_b64 = body.image.split(",")[-1] if "," in body.image else body.image
 
-    face_b64 = getFace(raw_b64)
-    if face_b64 is None:
-        raise HTTPException(status_code=422, detail="No face detected in image")
-
     global current_task_id
     current_task_id += 1
     task_id = current_task_id
@@ -381,7 +377,7 @@ def stage1(
         task_id,
         "Keep the image grayscale, make the person on the picture look happy and smiling with lighting coming from the top",
         "Keep the image grayscale, make the person slightly angry and frustrated looking, with lighting coming from the bottom",
-        face_b64,
+        raw_b64,
     )
 
     # Run OCR on the uploaded image
@@ -422,13 +418,29 @@ def generate_report(
         raise HTTPException(status_code=400, detail="canvas_image is required")
 
     image_bytes = base64.b64decode(request.canvas_image)
-    prompt = STAGE4_REPORT_PROMPT.format(description=request.title or "No description provided")
+    prompt = STAGE4_REPORT_PROMPT.format(
+        description=request.title or "No description provided"
+    )
 
     response = gemini.models.generate_content(
         model=chosenModel,
         contents=[
             genai.types.Part.from_bytes(data=image_bytes, mime_type="image/png"),
-            genai.types.Part.from_text(text=prompt),
+            genai.types.Part.from_text(
+                text=f"""""You are generating a accident report for an claimaint trying to make an insurance claim Background info: {prompt} | Please dont write it like a letter, you are on a portal. Include only 3 sections as per the following example 
+*Incident Description:**
+At the time of the incident, I was driving the vehicle represented as the blue car in the attached diagram. I had come to a complete stop at a red traffic light. While stationary and waiting for the signal to change, my vehicle was struck from behind by another vehicle (represented as the red car in the diagram). The driver of the other vehicle failed to stop in time, resulting in a direct rear-end collision.
+
+**Vehicle Positions and Collision Nature:**
+As illustrated in the incident map, my vehicle was positioned directly in front of the other vehicle. The arrow indicates the trajectory of the other car as it moved forward into the rear of my stationary vehicle. The point of impact was the center-rear of my car and the front-center of the other vehicle.
+
+**Damage Assessment:**
+Based on the damage severity scale (green = light, yellow = medium, red = heavy), the following damage was sustained:
+
+*   **My Vehicle (Blue Car):** My vehicle sustained heavy damage to the rear bumper, trunk area, and potentially the underlying frame, as indicated by the red marker at the point of impact on the diagram.
+*   **Other Vehicle (Red Car):** The striking vehicle is depicted in red, indicating that it sustained heavy damage to its front end as a result of the collision.
+                                       """
+            ),
         ],
     )
     return {"report": response.text}

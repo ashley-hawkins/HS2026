@@ -66,7 +66,7 @@ export default function MyClaims() {
               {claims.map(claim => (
                 <tr key={claim.id}>
                   <td className="font-mono text-sm">{claim.id}</td>
-                  <td className="max-w-xs truncate">{claim.content}</td>
+                  <td className="whitespace-pre-wrap break-words max-w-sm">{claim.content}</td>
                   <td className="text-sm text-base-content/60 whitespace-nowrap">
                     {new Date(claim.created_at).toLocaleString()}
                   </td>
