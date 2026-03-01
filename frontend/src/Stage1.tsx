@@ -1,7 +1,19 @@
 import { useState, useRef } from 'react'
 
+interface OcrResult {
+  surname: string
+  fornames: string
+  dob: string
+  licenseRef: string
+}
+
+interface Stage1Result {
+  ocrResult: OcrResult
+  taskId: string
+}
+
 interface Stage1Props {
-  onComplete: () => void
+  onComplete: (res: Stage1Result) => void
 }
 
 export default function Stage1({ onComplete }: Stage1Props) {
@@ -65,8 +77,16 @@ export default function Stage1({ onComplete }: Stage1Props) {
     setSubmitting(true)
     try {
       // TODO: send photo to backend
-      // await fetch('/api/id-upload', { method: 'POST', body: JSON.stringify({ image: photo }) })
-      onComplete()
+      const res = await fetch(`http://localhost:8000/id-upload`, {
+        method: 'POST', body: JSON.stringify({ image: photo }), headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+      // get json response .ocr
+      const data = await res.json()
+      console.log('OCR result:', data.ocrResult)
+      console.log('Background Task ID:', data.taskId)
+      onComplete({ ocrResult: data.ocrResult, taskId: data.taskId })
     } finally {
       setSubmitting(false)
     }
