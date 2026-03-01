@@ -2,9 +2,10 @@ import { useState } from "react";
 
 interface LoginProps {
   onSuccess?: (email: string) => void;
+  onRegister?: () => void;
 }
 
-export default function Login({ onSuccess }: LoginProps) {
+export default function Login({ onSuccess, onRegister }: LoginProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -73,6 +74,17 @@ export default function Login({ onSuccess }: LoginProps) {
         >
           {submitting ? <span className="loading loading-spinner" /> : "Log In"}
         </button>
+
+        <p className="text-center text-sm text-base-content/50">
+          Don't have an account?{" "}
+          <button
+            type="button"
+            className="link link-primary"
+            onClick={onRegister}
+          >
+            Make one here
+          </button>
+        </p>
       </form>
     </div>
   );
