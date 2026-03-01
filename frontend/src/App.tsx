@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Stage1 from './Stage1'
+import StageDriverDetails, { type DriverDetails } from './StageDriverDetails'
 import Stage2 from './Stage2'
 import Stage3 from './Stage3'
 import Stage4 from './Stage4'
@@ -9,19 +10,21 @@ import Register from './Register'
 
 const STAGE_LABELS = [
   'ID Verification',
+  'Driver Details',
   'Description',
   'Incident Map',
   'Review Summary',
   'Feedback',
 ]
 
-const TOTAL_STAGES = 5
+const TOTAL_STAGES = 6
 
 type View = 'claim' | 'my-claims' | 'login' | 'register'
 
 export function App() {
   const [view, setView] = useState<View>(() => localStorage.getItem('token') ? 'claim' : 'login')
   const [stage, setStage] = useState(1)
+  const [driverDetails, setDriverDetails] = useState<Partial<DriverDetails>>({})
   const [vehicles, setVehicles] = useState<string[]>([])
   const [summary, setSummary] = useState('')
   const [userEmail, setUserEmail] = useState<string | null>(() => localStorage.getItem('email'))
@@ -51,6 +54,7 @@ export function App() {
 
   function startNewClaim() {
     setStage(1)
+    setDriverDetails({})
     setVehicles([])
     setSummary('')
     setView('claim')
@@ -193,15 +197,21 @@ export function App() {
               <Stage1 onComplete={() => setStage(2)} />
             )}
             {stage === 2 && (
-              <Stage2 onComplete={v => { setVehicles(v); setStage(3) }} />
+              <StageDriverDetails
+                initialValues={driverDetails}
+                onComplete={details => { setDriverDetails(details); setStage(3) }}
+              />
             )}
             {stage === 3 && (
-              <Stage3 vehicles={vehicles} onComplete={s => { setSummary(s); setStage(4) }} />
+              <Stage2 onComplete={v => { setVehicles(v); setStage(4) }} />
             )}
             {stage === 4 && (
-              <Stage4 initialSummary={summary} onComplete={() => setStage(5)} />
+              <Stage3 vehicles={vehicles} onComplete={s => { setSummary(s); setStage(5) }} />
             )}
             {stage === 5 && (
+              <Stage4 initialSummary={summary} onComplete={() => setStage(6)} />
+            )}
+            {stage === 6 && (
               <Stage5 />
             )}
           </div>

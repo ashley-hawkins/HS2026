@@ -205,6 +205,7 @@ def health():
     return {"status": "fuck_you_you_stupid_bitch"}
 
 
+
 @router.post("/simple-req")
 def simple_req(prompt: SimplePrompt):
     response = gemini.models.generate_content(
@@ -270,6 +271,15 @@ def register(body: AuthRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
     return {"id": user.id, "email": user.email}
+
+@router.post("/id_upload")
+def stage1(current_user: User = Depends(get_current_user)):
+    return {
+        "surname": "Smith",
+        "forenames": "John Michael",
+        "dob": "1990-01-01",
+        "licenseRef": "SMITH901010JA9AB"
+    }
 
 
 @router.post("/auth/login")
