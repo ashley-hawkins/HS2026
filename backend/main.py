@@ -282,6 +282,10 @@ class ClaimRequest(BaseModel):
     content: str
 
 
+class IdUploadRequest(BaseModel):
+    image: str  # base64-encoded image
+
+
 @router.post("/auth/register")
 def register(body: AuthRequest, db: Session = Depends(get_db)):
     hashed = bcrypt.hashpw(body.password.encode(), bcrypt.gensalt()).decode()
@@ -292,18 +296,27 @@ def register(body: AuthRequest, db: Session = Depends(get_db)):
     return {"id": user.id, "email": user.email}
 
 
-def _run_image_generation(task_id: int, happy_prompt: str, sad_prompt: str):
+def _run_image_generation(task_id: int, happy_prompt: str, sad_prompt: str, face_b64: str):
+    face_bytes = base64.b64decode(face_b64)
+
     def generate(prompt: str, label: str):
-        response = gemini.models.generate_images(
-            model="imagen-3.0-generate-002",
-            prompt=prompt,
-            config=genai.types.GenerateImagesConfig(number_of_images=1),
+        response = gemini.models.generate_content(
+            model="gemini-2.0-flash-preview-image-generation",
+            contents=[
+                genai.types.Part.from_bytes(data=face_bytes, mime_type="image/webp"),
+                genai.types.Part.from_text(text=prompt),
+            ],
+            config=genai.types.GenerateContentConfig(
+                response_modalities=["IMAGE"],
+            ),
         )
-        image_bytes = response.generated_images[0].image.image_bytes
-        filename = f"task_{task_id}_{label}.png"
-        with open(filename, "wb") as f:
-            f.write(image_bytes)
-        return base64.b64encode(image_bytes).decode()
+        for part in response.candidates[0].content.parts:
+            if part.inline_data is not None:
+                image_bytes = part.inline_data.data
+                with open(f"task_{task_id}_{label}.png", "wb") as f:
+                    f.write(image_bytes)
+                return base64.b64encode(image_bytes).decode()
+        raise ValueError("No image returned by Gemini")
 
     try:
         TASK_RESULTS[task_id] = {
@@ -317,9 +330,14 @@ def _run_image_generation(task_id: int, happy_prompt: str, sad_prompt: str):
 
 @router.post("/id_upload")
 def stage1(
+    body: IdUploadRequest,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
 ):
+    face_b64 = getFace(body.image)
+    if face_b64 is None:
+        raise HTTPException(status_code=422, detail="No face detected in image")
+
     global CURRENT_TASK_ID
     CURRENT_TASK_ID += 1
     task_id = CURRENT_TASK_ID
@@ -327,8 +345,9 @@ def stage1(
     background_tasks.add_task(
         _run_image_generation,
         task_id,
-        "placeholder happy prompt",
-        "placeholder sad prompt",
+        "Keep the image grayscale, make the person on the picture look happy and smiling with lighting coming from the top",
+        "Keep the image grayscale, make the person slightly angry and frustrated looking, with lighting coming from the bottom",
+        face_b64,
     )
     return {
         "surname": "Smith",
