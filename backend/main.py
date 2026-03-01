@@ -1,9 +1,18 @@
-from fastapi import FastAPI, APIRouter, File, UploadFile, Depends, HTTPException, status
+from fastapi import (
+    FastAPI,
+    APIRouter,
+    File,
+    UploadFile,
+    Depends,
+    HTTPException,
+    status,
+    BackgroundTasks,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
 from database import init_db, get_db, User, Claim
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, ConfigDict
+from typing import Optional, List
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 import bcrypt
@@ -23,6 +32,8 @@ SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production")
 ALGORITHM = "HS256"
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+CURRENT_TASK_ID = 0
+TASK_RESULTS = {}
 
 # from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -205,7 +216,6 @@ def health():
     return {"status": "fuck_you_you_stupid_bitch"}
 
 
-
 @router.post("/simple-req")
 def simple_req(prompt: SimplePrompt):
     response = gemini.models.generate_content(
@@ -231,15 +241,15 @@ def just_report(request: ReportRequest):
 
 # --- auth helpers ---
 
+
 def create_token(user_id: int) -> str:
-    payload = {
-        "sub": str(user_id),
-        "exp": datetime.utcnow() + timedelta(hours=24)
-    }
+    payload = {"sub": str(user_id), "exp": datetime.utcnow() + timedelta(hours=24)}
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+def get_current_user(
+    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = int(payload["sub"])
@@ -254,9 +264,18 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 # --- auth routes ---
 
+
 class AuthRequest(BaseModel):
     email: str
     password: str
+
+
+class ClaimOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    content: str
+    created_at: datetime
 
 
 class ClaimRequest(BaseModel):
@@ -272,14 +291,60 @@ def register(body: AuthRequest, db: Session = Depends(get_db)):
     db.refresh(user)
     return {"id": user.id, "email": user.email}
 
+
+def _run_image_generation(task_id: int, happy_prompt: str, sad_prompt: str):
+    def generate(prompt: str, label: str):
+        response = gemini.models.generate_images(
+            model="imagen-3.0-generate-002",
+            prompt=prompt,
+            config=genai.types.GenerateImagesConfig(number_of_images=1),
+        )
+        image_bytes = response.generated_images[0].image.image_bytes
+        filename = f"task_{task_id}_{label}.png"
+        with open(filename, "wb") as f:
+            f.write(image_bytes)
+        return base64.b64encode(image_bytes).decode()
+
+    try:
+        TASK_RESULTS[task_id] = {
+            "status": "done",
+            "happy": generate(happy_prompt, "happy"),
+            "sad": generate(sad_prompt, "sad"),
+        }
+    except Exception as e:
+        TASK_RESULTS[task_id] = {"status": "error", "detail": str(e)}
+
+
 @router.post("/id_upload")
-def stage1(current_user: User = Depends(get_current_user)):
+def stage1(
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+):
+    global CURRENT_TASK_ID
+    CURRENT_TASK_ID += 1
+    task_id = CURRENT_TASK_ID
+    TASK_RESULTS[task_id] = {"status": "pending"}
+    background_tasks.add_task(
+        _run_image_generation,
+        task_id,
+        "placeholder happy prompt",
+        "placeholder sad prompt",
+    )
     return {
         "surname": "Smith",
         "forenames": "John Michael",
         "dob": "1990-01-01",
-        "licenseRef": "SMITH901010JA9AB"
+        "licenseRef": "SMITH901010JA9AB",
+        "task_id": task_id,
     }
+
+
+@router.get("/task/{task_id}")
+def get_task(task_id: int, current_user: User = Depends(get_current_user)):
+    result = TASK_RESULTS.get(task_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return result
 
 
 @router.post("/auth/login")
@@ -287,18 +352,29 @@ def login(body: AuthRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == body.email).first()
     if not user or not bcrypt.checkpw(body.password.encode(), user.password.encode()):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    return {"access_token": create_token(user.id), "token_type": "bearer", "email": user.email}
+    return {
+        "access_token": create_token(user.id),
+        "token_type": "bearer",
+        "email": user.email,
+    }
 
 
 # --- protected claim routes ---
 
-@router.get("/claims")
-def get_claims(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+
+@router.get("/claims", response_model=List[ClaimOut])
+def get_claims(
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
     return db.query(Claim).filter(Claim.user_id == current_user.id).all()
 
 
 @router.post("/claims")
-def create_claim(body: ClaimRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_claim(
+    body: ClaimRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     claim = Claim(user_id=current_user.id, content=body.content)
     db.add(claim)
     db.commit()
@@ -312,6 +388,7 @@ if __name__ == "__main__":
     with open("test1.webp", "rb") as file:
         base64_string = base64.b64encode(file.read()).decode("utf-8")
 
+    print(base64_string)
     with open("result.webp", "wb") as file:
         file.write(base64.b64decode(getFace(base64_string)))
 
