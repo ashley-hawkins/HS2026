@@ -8,15 +8,28 @@ const FACES = [
 
 export default function Stage5(props: {
   stage1TaskResult: Stage1TaskResult | null
+  claimReport: string
 }) {
   const [selected, setSelected] = useState<number | null>(null)
   const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
 
   async function handleSubmit() {
     if (selected === null) return
-    // TODO: send satisfaction rating to backend
-    // await fetch('/api/satisfaction', { method: 'POST', body: JSON.stringify({ rating: selected }) })
-    setSubmitted(true)
+    setSubmitting(true)
+    try {
+      await fetch('http://localhost:8000/claims', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({ content: props.claimReport }),
+      })
+      setSubmitted(true)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   if (submitted) {
@@ -49,12 +62,15 @@ export default function Stage5(props: {
           >
             {
               props.stage1TaskResult ? (
-                <img src={face.key === 'happy' ? props.stage1TaskResult.happyFaceBase64 : props.stage1TaskResult.sadFaceBase64}
+                <img
+                  src={face.key === 'happy'
+                    ? `data:image/png;base64,${props.stage1TaskResult.happyFaceBase64}`
+                    : `data:image/png;base64,${props.stage1TaskResult.sadFaceBase64}`}
                   alt={face.label}
-                  className="w-128 h-128"
+                  className="w-32 h-32 object-cover rounded-lg"
                 />
               ) : (
-                <span className="loading loading-spinner w-128 h-128" />
+                <span className="loading loading-spinner w-32 h-32" />
               )
             }
             <span className="text-xs text-base-content/60">{face.label}</span>
@@ -64,10 +80,10 @@ export default function Stage5(props: {
 
       <button
         className="btn btn-primary w-full max-w-xs"
-        disabled={selected === null}
+        disabled={selected === null || submitting}
         onClick={handleSubmit}
       >
-        Submit
+        {submitting ? <span className="loading loading-spinner" /> : 'Submit'}
       </button>
     </div>
   )

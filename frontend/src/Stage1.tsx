@@ -2,14 +2,14 @@ import { useState, useRef } from 'react'
 
 interface OcrResult {
   surname: string
-  fornames: string
+  forenames: string
   dob: string
   licenseRef: string
 }
 
 interface Stage1Result {
   ocrResult: OcrResult
-  taskId: string
+  taskId: number
 }
 
 interface Stage1Props {
@@ -76,17 +76,25 @@ export default function Stage1({ onComplete }: Stage1Props) {
     if (!photo) return
     setSubmitting(true)
     try {
-      // TODO: send photo to backend
-      const res = await fetch(`http://localhost:8000/id-upload`, {
-        method: 'POST', body: JSON.stringify({ image: photo }), headers: {
-          'Content-Type': 'application/json'
-        }
+      const base64Data = photo.includes(',') ? photo.split(',')[1] : photo
+      const res = await fetch('http://localhost:8000/id-upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({ image: base64Data }),
       })
-      // get json response .ocr
       const data = await res.json()
-      console.log('OCR result:', data.ocrResult)
-      console.log('Background Task ID:', data.taskId)
-      onComplete({ ocrResult: data.ocrResult, taskId: data.taskId })
+      onComplete({
+        ocrResult: {
+          surname: data.surname ?? '',
+          forenames: data.forenames ?? '',
+          dob: data.dob ?? '',
+          licenseRef: data.licenseRef ?? '',
+        },
+        taskId: data.task_id,
+      })
     } finally {
       setSubmitting(false)
     }

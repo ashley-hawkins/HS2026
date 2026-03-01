@@ -1,10 +1,10 @@
 import { useRef, useEffect, useState } from 'react'
-import { Stage, Layer, Line, Text, Transformer } from 'react-konva'
+import { Stage, Layer, Line, Text, Transformer, Image as KonvaImage, Group } from 'react-konva'
 import type Konva from 'konva'
 
 interface Stage3Props {
-  vehicles: string[]
-  onComplete: (summary: string) => void
+  description: string
+  onComplete: (report: string) => void
 }
 
 type StickerColor = 'green' | 'yellow' | 'red'
@@ -18,7 +18,22 @@ const STICKER_COLORS: Record<StickerColor, string> = {
 type Action =
   | { kind: 'line'; id: string; points: number[] }
   | { kind: 'sticker'; id: string; x: number; y: number; rotation: number; color: StickerColor }
-  | { kind: 'vehicle'; id: string; x: number; y: number; rotation: number; label: string }
+  | { kind: 'vehicle'; id: string; x: number; y: number; rotation: number; label: string; carColor: 'blue' | 'red' }
+
+const CAR_TYPES = [
+  { label: 'Your car', carColor: 'blue' as const, src: '/car-blue.svg' },
+  { label: 'Other car', carColor: 'red' as const, src: '/car-red.svg' },
+]
+
+function useImage(src: string) {
+  const [image, setImage] = useState<HTMLImageElement | null>(null)
+  useEffect(() => {
+    const img = new window.Image()
+    img.src = src
+    img.onload = () => setImage(img)
+  }, [src])
+  return image
+}
 
 // --- Draggable + rotatable X sticker ---
 function DraggableSticker({
@@ -51,7 +66,7 @@ function DraggableSticker({
         x={sticker.x}
         y={sticker.y}
         rotation={sticker.rotation}
-        fontSize={56}
+        fontSize={168}
         fill={STICKER_COLORS[sticker.color]}
         fontStyle="bold"
         draggable
@@ -80,7 +95,7 @@ function DraggableSticker({
   )
 }
 
-// --- Draggable + rotatable vehicle label ---
+// --- Draggable + rotatable car image ---
 function DraggableVehicle({
   vehicle, isSelected, onSelect, onUpdate,
 }: {
@@ -89,8 +104,10 @@ function DraggableVehicle({
   onSelect: () => void
   onUpdate: (patch: Partial<typeof vehicle>) => void
 }) {
-  const nodeRef = useRef<Konva.Text>(null)
+  const nodeRef = useRef<Konva.Group>(null)
   const trRef = useRef<Konva.Transformer>(null)
+  const src = vehicle.carColor === 'blue' ? '/car-blue.svg' : '/car-red.svg'
+  const image = useImage(src)
 
   useEffect(() => {
     if (isSelected && trRef.current && nodeRef.current) {
@@ -104,14 +121,11 @@ function DraggableVehicle({
 
   return (
     <>
-      <Text
+      <Group
         ref={nodeRef}
-        text={`🚗 ${vehicle.label}`}
         x={vehicle.x}
         y={vehicle.y}
         rotation={vehicle.rotation}
-        fontSize={28}
-        fill="#1e293b"
         draggable
         onClick={e => { e.cancelBubble = true; onSelect() }}
         onTap={e => { e.cancelBubble = true; onSelect() }}
@@ -121,7 +135,27 @@ function DraggableVehicle({
           y: e.target.y(),
           rotation: e.target.rotation(),
         })}
-      />
+      >
+        {image && (
+          <KonvaImage
+            image={image}
+            width={84}
+            height={84}
+            offsetX={42}
+            offsetY={42}
+          />
+        )}
+        <Text
+          text={vehicle.label}
+          fontSize={16}
+          fill={vehicle.carColor === 'blue' ? '#3b82f6' : '#ef4444'}
+          fontStyle="bold"
+          width={90}
+          offsetX={45}
+          y={46}
+          align="center"
+        />
+      </Group>
       {isSelected && (
         <Transformer
           ref={trRef}
@@ -138,7 +172,7 @@ function DraggableVehicle({
   )
 }
 
-export default function Stage3({ vehicles, onComplete }: Stage3Props) {
+export default function Stage3({ description, onComplete }: Stage3Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<Konva.Stage>(null)
   const [size, setSize] = useState({ width: 600, height: 480 })
@@ -148,6 +182,7 @@ export default function Stage3({ vehicles, onComplete }: Stage3Props) {
   const [currentLine, setCurrentLine] = useState<number[] | null>(null)
   const isDrawing = useRef(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
   // Resize observer
   useEffect(() => {
@@ -217,7 +252,8 @@ export default function Stage3({ vehicles, onComplete }: Stage3Props) {
       setActions(prev => [...prev, { kind: 'sticker', id: crypto.randomUUID(), x, y, rotation: 0, color }])
     } else if (type === 'vehicle') {
       const label = e.dataTransfer.getData('label')
-      setActions(prev => [...prev, { kind: 'vehicle', id: crypto.randomUUID(), x, y, rotation: 0, label }])
+      const carColor = e.dataTransfer.getData('carColor') as 'blue' | 'red'
+      setActions(prev => [...prev, { kind: 'vehicle', id: crypto.randomUUID(), x, y, rotation: 0, label, carColor }])
     }
   }
 
@@ -225,9 +261,31 @@ export default function Stage3({ vehicles, onComplete }: Stage3Props) {
   const stickers = actions.filter((a): a is Extract<Action, { kind: 'sticker' }> => a.kind === 'sticker')
   const vehicleStickers = actions.filter((a): a is Extract<Action, { kind: 'vehicle' }> => a.kind === 'vehicle')
 
-  function handleSubmit() {
-    const placeholderSummary = 'Based on your submission, our AI has drafted the following summary of your claim.'
-    onComplete(placeholderSummary)
+  async function handleSubmit() {
+    setSubmitting(true)
+    try {
+      const canvasDataUrl = stageRef.current?.toDataURL({ mimeType: 'image/png' })
+      if (!canvasDataUrl) throw new Error('Failed to capture canvas')
+      const base64Image = canvasDataUrl.split(',')[1]
+
+      const res = await fetch('http://localhost:8000/generate-report', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({
+          title: description,
+          canvas_image: base64Image,
+        }),
+      })
+      const data = await res.json()
+      onComplete(data.report ?? 'Could not generate report.')
+    } catch {
+      onComplete('Could not generate report. Please proceed and edit manually.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -235,6 +293,16 @@ export default function Stage3({ vehicles, onComplete }: Stage3Props) {
       <div className="text-center">
         <h2 className="text-2xl font-bold mb-1">Mark the incident</h2>
         <p className="text-base-content/60 text-sm">Drag markers onto the canvas · Click to rotate</p>
+      </div>
+
+      {/* Damage legend */}
+      <div className="flex gap-4 items-center justify-center text-sm flex-wrap font-medium">
+        <span style={{ color: STICKER_COLORS.green }}>✕</span>
+        <span className="text-base-content/70">Green = light damage</span>
+        <span style={{ color: STICKER_COLORS.yellow }}>✕</span>
+        <span className="text-base-content/70">Yellow = medium damage</span>
+        <span style={{ color: STICKER_COLORS.red }}>✕</span>
+        <span className="text-base-content/70">Red = heavy damage</span>
       </div>
 
       <div className="flex gap-4 flex-1 min-h-0">
@@ -306,22 +374,22 @@ export default function Stage3({ vehicles, onComplete }: Stage3Props) {
         </div>
 
         {/* Toolbar */}
-        <div className="flex flex-col gap-3 items-center bg-base-200 rounded-xl p-3 w-20">
+        <div className="flex flex-col gap-3 items-center bg-base-200 rounded-xl p-3 w-32">
           <button
-            className={`btn btn-square btn-sm w-full ${tool === 'pen' ? 'btn-primary' : 'btn-ghost'}`}
+            className={`btn btn-square w-16 h-16 ${tool === 'pen' ? 'btn-primary' : 'btn-ghost'}`}
             title="Pen"
             onClick={() => setTool(tool === 'pen' ? 'select' : 'pen')}
           >
-            ✏️
+            <span style={{ fontSize: '2rem' }}>✏️</span>
           </button>
 
           <button
-            className="btn btn-square btn-sm btn-ghost w-full"
+            className="btn btn-square btn-ghost w-16 h-16"
             title="Undo"
             onClick={undo}
             disabled={actions.length === 0}
           >
-            ↩
+            <span style={{ fontSize: '2rem' }}>↩</span>
           </button>
 
           <div className="divider my-0 w-full" />
@@ -334,8 +402,8 @@ export default function Stage3({ vehicles, onComplete }: Stage3Props) {
                 e.dataTransfer.setData('type', 'sticker')
                 e.dataTransfer.setData('color', color)
               }}
-              className="flex items-center justify-center w-full h-10 rounded-lg cursor-grab active:cursor-grabbing select-none text-2xl font-bold"
-              style={{ color: STICKER_COLORS[color] }}
+              className="flex items-center justify-center w-full rounded-lg cursor-grab active:cursor-grabbing select-none font-bold"
+              style={{ color: STICKER_COLORS[color], fontSize: '4.5rem', lineHeight: '1' }}
               title={`Drag ${color} marker onto canvas`}
             >
               ✕
@@ -344,26 +412,31 @@ export default function Stage3({ vehicles, onComplete }: Stage3Props) {
 
           <div className="divider my-0 w-full" />
 
-          {vehicles.map((v, i) => (
+          {CAR_TYPES.map(car => (
             <div
-              key={i}
+              key={car.label}
               draggable
               onDragStart={e => {
                 e.dataTransfer.setData('type', 'vehicle')
-                e.dataTransfer.setData('label', v)
+                e.dataTransfer.setData('label', car.label)
+                e.dataTransfer.setData('carColor', car.carColor)
               }}
-              className="flex flex-col items-center justify-center w-full h-12 rounded-lg cursor-grab active:cursor-grabbing select-none gap-0.5"
-              title={`Drag ${v} onto canvas`}
+              className="flex flex-col items-center justify-center w-full rounded-lg cursor-grab active:cursor-grabbing select-none gap-1 p-1"
+              title={`Drag ${car.label} onto canvas`}
             >
-              <span className="text-2xl">🚗</span>
-              <span className="text-xs text-base-content/60 truncate w-full text-center">{v}</span>
+              <img src={car.src} style={{ width: 72, height: 72 }} alt={car.label} />
+              <span className="text-xs font-medium text-center text-base-content/70">{car.label}</span>
             </div>
           ))}
         </div>
       </div>
 
-      <button className="btn btn-primary w-full" onClick={handleSubmit}>
-        Submit
+      <button
+        className="btn btn-primary w-full"
+        onClick={handleSubmit}
+        disabled={submitting}
+      >
+        {submitting ? <><span className="loading loading-spinner" /> Generating report…</> : 'Submit'}
       </button>
     </div>
   )

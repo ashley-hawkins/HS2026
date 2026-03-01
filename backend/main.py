@@ -27,6 +27,8 @@ import base64
 import google.genai as genai
 import math
 import os
+import json
+import re
 
 SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production")
 ALGORITHM = "HS256"
@@ -174,6 +176,33 @@ app.add_middleware(
 init_db()
 router = APIRouter()
 chosenModel = "gemini-3-flash-preview"
+
+# ── Easily editable prompts ──────────────────────────────────────────────────
+
+# Stage 1: Parse OCR text from driving licence into JSON for Stage 2 autofill
+STAGE1_OCR_PROMPT = """You are extracting information from a UK driving licence.
+Given the following raw OCR text, extract these fields and return ONLY a valid JSON object with exactly these keys:
+{{
+  "surname": "...",
+  "forenames": "...",
+  "dob": "YYYY-MM-DD",
+  "licenseRef": "..."
+}}
+If a field cannot be found, use an empty string. Return ONLY the JSON object with no extra text or markdown.
+
+OCR Text:
+{ocr_text}"""
+
+# Stage 4: Generate a claim report from the incident map canvas image
+STAGE4_REPORT_PROMPT = """You are an insurance claim assistant. You have been given an incident map diagram and a description of the accident.
+
+Description from claimant: {description}
+
+Based on the incident diagram image and the description above, write a formal insurance claim report from the claimant's first-person perspective.
+Describe the incident clearly and professionally, including vehicle positions shown in the diagram, the nature of the collision, damage levels indicated by the coloured markers (green = light damage, yellow = medium damage, red = heavy damage), and any other relevant observations.
+Write in first person as the claimant."""
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 class ReportRequest(BaseModel):
@@ -330,13 +359,16 @@ def _run_image_generation(
         TASK_RESULTS[task_id] = {"status": "error", "detail": str(e)}
 
 
-@router.post("/id_upload")
+@router.post("/id-upload")
 def stage1(
     body: IdUploadRequest,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
 ):
-    face_b64 = getFace(body.image)
+    # Strip data URL prefix if present
+    raw_b64 = body.image.split(",")[-1] if "," in body.image else body.image
+
+    face_b64 = getFace(raw_b64)
     if face_b64 is None:
         raise HTTPException(status_code=422, detail="No face detected in image")
 
@@ -351,13 +383,55 @@ def stage1(
         "Keep the image grayscale, make the person slightly angry and frustrated looking, with lighting coming from the bottom",
         face_b64,
     )
+
+    # Run OCR on the uploaded image
+    image_bytes = base64.b64decode(raw_b64)
+    np_img = np.frombuffer(image_bytes, np.uint8)
+    img_cv = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
+    ocr_fields = {"surname": "", "forenames": "", "dob": "", "licenseRef": ""}
+    if img_cv is not None:
+        ocr_words = reader.readtext(img_cv, detail=0)
+        ocr_text = " ".join(ocr_words)
+        try:
+            gemini_resp = gemini.models.generate_content(
+                contents=STAGE1_OCR_PROMPT.format(ocr_text=ocr_text),
+                model=chosenModel,
+            )
+            resp_text = gemini_resp.text.strip()
+            match = re.search(r"\{.*\}", resp_text, re.DOTALL)
+            if match:
+                ocr_fields = json.loads(match.group())
+        except Exception:
+            pass  # Fall back to empty fields if OCR/Gemini fails
+
     return {
-        "surname": "Smith",
-        "forenames": "John Michael",
-        "dob": "1990-01-01",
-        "licenseRef": "SMITH901010JA9AB",
+        "surname": ocr_fields.get("surname", ""),
+        "forenames": ocr_fields.get("forenames", ""),
+        "dob": ocr_fields.get("dob", ""),
+        "licenseRef": ocr_fields.get("licenseRef", ""),
         "task_id": task_id,
     }
+
+
+@router.post("/generate-report")
+def generate_report(
+    request: ReportRequest,
+    current_user: User = Depends(get_current_user),
+):
+    if not request.canvas_image:
+        raise HTTPException(status_code=400, detail="canvas_image is required")
+
+    image_bytes = base64.b64decode(request.canvas_image)
+    prompt = STAGE4_REPORT_PROMPT.format(description=request.title or "No description provided")
+
+    response = gemini.models.generate_content(
+        model=chosenModel,
+        contents=[
+            genai.types.Part.from_bytes(data=image_bytes, mime_type="image/png"),
+            genai.types.Part.from_text(text=prompt),
+        ],
+    )
+    return {"report": response.text}
 
 
 @router.get("/task/{task_id}")

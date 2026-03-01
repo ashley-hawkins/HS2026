@@ -1,31 +1,17 @@
 import { useState } from 'react'
 
 interface Stage2Props {
-  onComplete: (vehicles: string[]) => void
+  onComplete: (description: string) => void
 }
 
 export default function Stage2({ onComplete }: Stage2Props) {
   const [text, setText] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const wordCount = text.trim() === '' ? 0 : text.trim().split(/\s+/).length
 
   async function handleSubmit() {
-    if (wordCount > 15) {
-      setError('Please write no more than 15 words.')
-      return
-    }
-    setError(null)
     setSubmitting(true)
     try {
-      // TODO: send description to backend and receive vehicle list
-      // const res = await fetch('/api/describe', { method: 'POST', body: JSON.stringify({ description: text }) })
-      // const data = await res.json()
-      // onComplete(data.vehicles)
-
-      // Placeholder response
-      onComplete(['Car', 'Truck'])
+      onComplete(text)
     } finally {
       setSubmitting(false)
     }
@@ -35,7 +21,7 @@ export default function Stage2({ onComplete }: Stage2Props) {
     <div className="flex flex-col items-center gap-6 w-full max-w-lg mx-auto">
       <div className="text-center">
         <h2 className="text-2xl font-bold mb-1">Describe what happened</h2>
-        <p className="text-base-content/60 text-sm">Write a brief explanation (up to 15 words)</p>
+        <p className="text-base-content/60 text-sm">Write a description of the incident in your own words</p>
       </div>
 
       <div className="w-full">
@@ -45,16 +31,11 @@ export default function Stage2({ onComplete }: Stage2Props) {
           value={text}
           onChange={e => setText(e.target.value)}
         />
-        <div className={`text-sm mt-1 text-right ${wordCount > 15 ? 'text-error' : 'text-base-content/50'}`}>
-          {wordCount} / 15 words
-        </div>
       </div>
-
-      {error && <div className="alert alert-error w-full"><span>{error}</span></div>}
 
       <button
         className="btn btn-primary w-full"
-        disabled={submitting || wordCount === 0 || wordCount > 15}
+        disabled={submitting || text.trim() === ''}
         onClick={handleSubmit}
       >
         {submitting ? <span className="loading loading-spinner" /> : 'Submit'}

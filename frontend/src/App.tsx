@@ -28,9 +28,12 @@ export interface Stage1TaskResult {
 }
 
 
-async function waitForTaskResult(taskId: string): Promise<Stage1TaskResult> {
+async function waitForTaskResult(taskId: number): Promise<Stage1TaskResult> {
+  const token = localStorage.getItem('token')
   while (true) {
-    const res = await fetch(`/api/task-result/${taskId}`)
+    const res = await fetch(`http://localhost:8000/task/${taskId}`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
     if (res.status === 200) {
       const data = await res.json()
       if (data.status === 'done') {
@@ -48,7 +51,7 @@ export function App() {
   const [view, setView] = useState<View>(() => localStorage.getItem('token') ? 'claim' : 'login')
   const [stage, setStage] = useState(1)
   const [driverDetails, setDriverDetails] = useState<Partial<DriverDetails>>({})
-  const [vehicles, setVehicles] = useState<string[]>([])
+  const [description, setDescription] = useState('')
   const [summary, setSummary] = useState('')
   const [userEmail, setUserEmail] = useState<string | null>(() => localStorage.getItem('email'))
   const [menuOpen, setMenuOpen] = useState(false)
@@ -79,8 +82,9 @@ export function App() {
   function startNewClaim() {
     setStage(1)
     setDriverDetails({})
-    setVehicles([])
+    setDescription('')
     setSummary('')
+    setStage1TaskResult(null)
     setView('claim')
   }
 
@@ -215,7 +219,10 @@ export function App() {
           <div className="flex-1 overflow-y-auto flex flex-col">
             {stage === 1 && (
               <Stage1 onComplete={(res) => {
-                
+                setDriverDetails(res.ocrResult)
+                if (res.taskId) {
+                  waitForTaskResult(res.taskId).then(result => setStage1TaskResult(result))
+                }
                 setStage(2)
               }} />
             )}
@@ -226,16 +233,16 @@ export function App() {
               />
             )}
             {stage === 3 && (
-              <Stage2 onComplete={v => { setVehicles(v); setStage(4) }} />
+              <Stage2 onComplete={text => { setDescription(text); setStage(4) }} />
             )}
             {stage === 4 && (
-              <Stage3 vehicles={vehicles} onComplete={s => { setSummary(s); setStage(5) }} />
+              <Stage3 description={description} onComplete={report => { setSummary(report); setStage(5) }} />
             )}
             {stage === 5 && (
-              <Stage4 initialSummary={summary} onComplete={() => setStage(6)} />
+              <Stage4 initialSummary={summary} onComplete={(editedText) => { setSummary(editedText); setStage(6) }} />
             )}
             {stage === 6 && (
-              <Stage5 stage1TaskResult={stage1TaskResult} />
+              <Stage5 stage1TaskResult={stage1TaskResult} claimReport={summary} />
             )}
           </div>
 
