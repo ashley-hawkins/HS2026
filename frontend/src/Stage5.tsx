@@ -1,14 +1,14 @@
 import { useState } from 'react'
+import type { Stage1TaskResult } from './App'
 
 const FACES = [
-  { level: 1, emoji: '😞', label: 'Very unhappy' },
-  { level: 2, emoji: '😕', label: 'Unhappy' },
-  { level: 3, emoji: '😐', label: 'Neutral' },
-  { level: 4, emoji: '🙂', label: 'Happy' },
-  { level: 5, emoji: '😄', label: 'Very happy' },
+  { level: 1, key: 'sad', label: 'Very unhappy' },
+  { level: 5, key: 'happy', label: 'Very happy' },
 ]
 
-export default function Stage5() {
+export default function Stage5(props: {
+  stage1TaskResult: Stage1TaskResult | null
+}) {
   const [selected, setSelected] = useState<number | null>(null)
   const [submitted, setSubmitted] = useState(false)
 
@@ -47,7 +47,16 @@ export default function Stage5() {
                 : 'border-base-300 bg-base-200 hover:border-primary/50'
               }`}
           >
-            <span className="text-5xl">{face.emoji}</span>
+            {
+              props.stage1TaskResult ? (
+                <img src={face.key === 'happy' ? props.stage1TaskResult.happyFaceBase64 : props.stage1TaskResult.sadFaceBase64}
+                  alt={face.label}
+                  className="w-128 h-128"
+                />
+              ) : (
+                <span className="loading loading-spinner w-128 h-128" />
+              )
+            }
             <span className="text-xs text-base-content/60">{face.label}</span>
           </button>
         ))}

@@ -22,6 +22,28 @@ const TOTAL_STAGES = 6
 
 type View = 'claim' | 'my-claims' | 'login' | 'register'
 
+export interface Stage1TaskResult {
+  happyFaceBase64: string
+  sadFaceBase64: string
+}
+
+
+async function waitForTaskResult(taskId: string): Promise<Stage1TaskResult> {
+  while (true) {
+    const res = await fetch(`/api/task-result/${taskId}`)
+    if (res.status === 200) {
+      const data = await res.json()
+      if (data.status === 'done') {
+        return {
+          happyFaceBase64: data.happy,
+          sadFaceBase64: data.sad,
+        }
+      }
+    }
+    await new Promise(resolve => setTimeout(resolve, 2000))
+  }
+}
+
 export function App() {
   const [view, setView] = useState<View>(() => localStorage.getItem('token') ? 'claim' : 'login')
   const [stage, setStage] = useState(1)
@@ -30,6 +52,7 @@ export function App() {
   const [summary, setSummary] = useState('')
   const [userEmail, setUserEmail] = useState<string | null>(() => localStorage.getItem('email'))
   const [menuOpen, setMenuOpen] = useState(false)
+  const [stage1TaskResult, setStage1TaskResult] = useState<Stage1TaskResult | null>(null)
 
   function signOut() {
     localStorage.removeItem('token')
@@ -191,7 +214,10 @@ export function App() {
           {/* Stage content */}
           <div className="flex-1 overflow-y-auto flex flex-col">
             {stage === 1 && (
-              <Stage1 onComplete={() => setStage(2)} />
+              <Stage1 onComplete={(res) => {
+                
+                setStage(2)
+              }} />
             )}
             {stage === 2 && (
               <StageDriverDetails
@@ -209,7 +235,7 @@ export function App() {
               <Stage4 initialSummary={summary} onComplete={() => setStage(6)} />
             )}
             {stage === 6 && (
-              <Stage5 />
+              <Stage5 stage1TaskResult={stage1TaskResult} />
             )}
           </div>
 
