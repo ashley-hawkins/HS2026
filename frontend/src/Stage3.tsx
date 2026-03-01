@@ -374,22 +374,22 @@ export default function Stage3({ description, onComplete }: Stage3Props) {
         </div>
 
         {/* Toolbar */}
-        <div className="flex flex-col gap-3 items-center bg-base-200 rounded-xl p-3 w-32">
+        <div className="flex flex-col gap-2 items-center bg-base-200 rounded-xl p-2 w-24 shrink-0 overflow-y-auto min-h-0">
           <button
-            className={`btn btn-square w-16 h-16 ${tool === 'pen' ? 'btn-primary' : 'btn-ghost'}`}
+            className={`btn btn-square btn-sm w-10 h-10 ${tool === 'pen' ? 'btn-primary' : 'btn-ghost'}`}
             title="Pen"
             onClick={() => setTool(tool === 'pen' ? 'select' : 'pen')}
           >
-            <span style={{ fontSize: '2rem' }}>✏️</span>
+            <span style={{ fontSize: '1.25rem' }}>✏️</span>
           </button>
 
           <button
-            className="btn btn-square btn-ghost w-16 h-16"
+            className="btn btn-square btn-ghost btn-sm w-10 h-10"
             title="Undo"
             onClick={undo}
             disabled={actions.length === 0}
           >
-            <span style={{ fontSize: '2rem' }}>↩</span>
+            <span style={{ fontSize: '1.25rem' }}>↩</span>
           </button>
 
           <div className="divider my-0 w-full" />
@@ -403,7 +403,7 @@ export default function Stage3({ description, onComplete }: Stage3Props) {
                 e.dataTransfer.setData('color', color)
               }}
               className="flex items-center justify-center w-full rounded-lg cursor-grab active:cursor-grabbing select-none font-bold"
-              style={{ color: STICKER_COLORS[color], fontSize: '4.5rem', lineHeight: '1' }}
+              style={{ color: STICKER_COLORS[color], fontSize: '2.5rem', lineHeight: '1' }}
               title={`Drag ${color} marker onto canvas`}
             >
               ✕
@@ -424,7 +424,7 @@ export default function Stage3({ description, onComplete }: Stage3Props) {
               className="flex flex-col items-center justify-center w-full rounded-lg cursor-grab active:cursor-grabbing select-none gap-1 p-1"
               title={`Drag ${car.label} onto canvas`}
             >
-              <img src={car.src} style={{ width: 72, height: 72 }} alt={car.label} />
+              <img src={car.src} style={{ width: 52, height: 52 }} alt={car.label} />
               <span className="text-xs font-medium text-center text-base-content/70">{car.label}</span>
             </div>
           ))}
