@@ -66,7 +66,7 @@ function DraggableSticker({
         x={sticker.x}
         y={sticker.y}
         rotation={sticker.rotation}
-        fontSize={168}
+        fontSize={56}
         fill={STICKER_COLORS[sticker.color]}
         fontStyle="bold"
         draggable
@@ -139,10 +139,10 @@ function DraggableVehicle({
         {image && (
           <KonvaImage
             image={image}
-            width={84}
-            height={84}
-            offsetX={42}
-            offsetY={42}
+            width={168}
+            height={168}
+            offsetX={84}
+            offsetY={84}
           />
         )}
         <Text
@@ -152,7 +152,7 @@ function DraggableVehicle({
           fontStyle="bold"
           width={90}
           offsetX={45}
-          y={46}
+          y={88}
           align="center"
         />
       </Group>
