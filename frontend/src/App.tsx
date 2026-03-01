@@ -4,6 +4,8 @@ import Stage2 from './Stage2'
 import Stage3 from './Stage3'
 import Stage4 from './Stage4'
 import Stage5 from './Stage5'
+import Login from './Login'
+import Register from './Register'
 
 const STAGE_LABELS = [
   'ID Verification',
@@ -74,15 +76,11 @@ export function App() {
       )}
 
       {view === 'login' && (
-        <div className="flex-1 flex items-center justify-center text-base-content/40 text-lg">
-          Login — coming soon
-        </div>
+        <Login onSuccess={() => setView('claim')} />
       )}
 
       {view === 'register' && (
-        <div className="flex-1 flex items-center justify-center text-base-content/40 text-lg">
-          Register — coming soon
-        </div>
+        <Register onSuccess={() => setView('claim')} />
       )}
 
       {view === 'claim' && (
