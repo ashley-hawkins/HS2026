@@ -32,7 +32,7 @@ SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production")
 ALGORITHM = "HS256"
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
-CURRENT_TASK_ID = 0
+current_task_id = 0
 TASK_RESULTS = {}
 
 # from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -296,7 +296,9 @@ def register(body: AuthRequest, db: Session = Depends(get_db)):
     return {"id": user.id, "email": user.email}
 
 
-def _run_image_generation(task_id: int, happy_prompt: str, sad_prompt: str, face_b64: str):
+def _run_image_generation(
+    task_id: int, happy_prompt: str, sad_prompt: str, face_b64: str
+):
     face_bytes = base64.b64decode(face_b64)
 
     def generate(prompt: str, label: str):
@@ -338,9 +340,9 @@ def stage1(
     if face_b64 is None:
         raise HTTPException(status_code=422, detail="No face detected in image")
 
-    global CURRENT_TASK_ID
-    CURRENT_TASK_ID += 1
-    task_id = CURRENT_TASK_ID
+    global current_task_id
+    current_task_id += 1
+    task_id = current_task_id
     TASK_RESULTS[task_id] = {"status": "pending"}
     background_tasks.add_task(
         _run_image_generation,
